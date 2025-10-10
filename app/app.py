@@ -40,10 +40,6 @@ with st.sidebar:
     if st.button("Reset Chat"):
         st.session_state["messages"] = []
 
-    st.subheader("Suggested Questions")
-    for section in ["Section 378 IPC", "Section 420 IPC", "Section 375 IPC"]:
-        if st.button(section):
-            st.session_state["messages"].append({"role": "user", "text": section})
 
 # ----------------------------
 # USER INPUT
