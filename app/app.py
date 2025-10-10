@@ -146,7 +146,10 @@ for msg in messages[-50:]:  # show last 50 messages
                 display:inline-block;
                 max-width:80%;
                 font-size:14px;
+                float:right;
+                clear:both;
             ">{msg['text']}</div>
+            <div style="clear:both;"></div>
             """,
             unsafe_allow_html=True
         )
@@ -164,7 +167,10 @@ for msg in messages[-50:]:  # show last 50 messages
                 display:inline-block;
                 max-width:80%;
                 font-size:14px;
+                float:left;
+                clear:both;
             ">{msg['text']}</div>
+            <div style="clear:both;"></div>
             """,
             unsafe_allow_html=True
         )
