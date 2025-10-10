@@ -7,7 +7,7 @@ import os
 # ----------------------------
 # CONFIGURE GOOGLE GEMINI API
 # ----------------------------
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])  # Use your real API key
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])  # Replace with your real API key
 MODEL_NAME = "gemini-2.5-flash"
 
 # ----------------------------
@@ -17,6 +17,7 @@ DATA_PATHS = [
     r"data/statutes.json",
     r"data/judgments.json"
 ]
+CHAT_HISTORY_FILE = "chat_history.json"
 
 # ----------------------------
 # LOAD LEGAL DATA
@@ -41,6 +42,11 @@ if "chat_sessions" not in st.session_state:
     st.session_state["chat_sessions"] = {}
 if "current_chat" not in st.session_state:
     st.session_state["current_chat"] = "General Chat"
+
+# Load persisted chat history
+if os.path.exists(CHAT_HISTORY_FILE):
+    with open(CHAT_HISTORY_FILE, "r", encoding="utf-8") as f:
+        st.session_state["chat_sessions"] = json.load(f)
 
 # Initialize messages for current chat
 if st.session_state["current_chat"] not in st.session_state["chat_sessions"]:
@@ -69,29 +75,36 @@ messages = st.session_state["chat_sessions"][st.session_state["current_chat"]]["
 # ----------------------------
 # USER INPUT
 # ----------------------------
-user_input = st.text_area("Enter your question:", height=100, key="input_box")
+if "input_box_text" not in st.session_state:
+    st.session_state["input_box_text"] = ""
+
+user_input = st.text_input(
+    "Enter your question:",
+    value=st.session_state["input_box_text"],
+    key="input_box_text",
+    placeholder="Type your question and press Enter"
+)
 
 # ----------------------------
-# SEND BUTTON
+# SEND MESSAGE AUTOMATICALLY
 # ----------------------------
-if st.button("Send"):
-    if user_input.strip():
-        # Add user message
-        messages.append({"role": "user", "text": user_input})
+if user_input.strip():
+    # Add user message
+    messages.append({"role": "user", "text": user_input})
 
-        # Build context from local statutes/judgments
-        context_snippets = []
-        for d in legal_docs:
-            text = d.get("text", "")
-            if user_input.lower() in text.lower():
-                context_snippets.append(text)
-        context = "\n".join(context_snippets[:5])
+    # Build context from local statutes/judgments
+    context_snippets = []
+    for d in legal_docs:
+        text = d.get("text", "")
+        if user_input.lower() in text.lower():
+            context_snippets.append(text)
+    context = "\n".join(context_snippets[:5])
 
-        # Build conversation history for AI context
-        full_chat_context = "\n".join([f"{m['role']}: {m['text']}" for m in messages])
+    # Build conversation history for AI context
+    full_chat_context = "\n".join([f"{m['role']}: {m['text']}" for m in messages])
 
-        # Prepare prompt
-        prompt = f"""
+    # Prepare prompt
+    prompt = f"""
 You are an expert Indian criminal law assistant.
 Use the previous conversation and the following statutes/judgments context to answer
 precisely.
@@ -104,23 +117,30 @@ Question:
 Answer concisely in simple legal terms, citing IPC sections or examples where possible.
 """
 
-        # Generate bot response
-        with st.spinner("Generating response..."):
-            try:
-                model = genai.GenerativeModel(MODEL_NAME)
-                response = model.generate_content(prompt)
-                bot_text = response.text
-            except Exception as e:
-                bot_text = f"❌ Error generating response: {str(e)}"
+    # Generate bot response
+    with st.spinner("Generating response..."):
+        try:
+            model = genai.GenerativeModel(MODEL_NAME)
+            response = model.generate_content(prompt)
+            bot_text = response.text
+        except Exception as e:
+            bot_text = f"❌ Error generating response: {str(e)}"
 
-        # Add bot message
-        messages.append({"role": "bot", "text": bot_text})
+    # Add bot message
+    messages.append({"role": "bot", "text": bot_text})
+
+    # Clear the input box
+    st.session_state["input_box_text"] = ""
+
+    # Persist chat history
+    with open(CHAT_HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump(st.session_state["chat_sessions"], f, indent=2, ensure_ascii=False)
 
 # ----------------------------
 # DISPLAY CHAT BUBBLES (DARK MODE)
 # ----------------------------
 st.markdown("<hr>", unsafe_allow_html=True)
-for msg in messages[-50:]:  # show last 50 messages
+for msg in messages[-50:]:
     if msg["role"] == "user":
         st.markdown(
             f"""
@@ -164,10 +184,13 @@ for msg in messages[-50:]:  # show last 50 messages
 
 # Scroll to latest message
 st.markdown("<div id='bottom'></div>", unsafe_allow_html=True)
-st.components.v1.html("<script>document.getElementById('bottom').scrollIntoView();</script>", height=0)
+st.components.v1.html(
+    "<script>document.getElementById('bottom').scrollIntoView();</script>",
+    height=0
+)
 
 # ----------------------------
 # FOOTER
 # ----------------------------
 st.markdown("---")
-st.markdown(" ⚖ Developed by Team BroCode — MIT ADT University")
+st.markdown("⚖ Developed by Team BroCode — MIT ADT University")
