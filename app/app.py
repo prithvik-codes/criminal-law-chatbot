@@ -6,7 +6,7 @@ import os
 # ----------------------------
 # CONFIGURE GOOGLE GEMINI API
 # ----------------------------
-genai.configure(api_key= "GEMINI_API_KEY")  # Replace with your real Gemini API key
+genai.configure(api_key= st.secrets["GEMINI_API_KEY"])  # Replace with your real Gemini API key
 MODEL_NAME = "gemini-2.0-flash"
 
 # ----------------------------
