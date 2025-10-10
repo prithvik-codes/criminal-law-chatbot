@@ -7,7 +7,7 @@ import os
 # ----------------------------
 # CONFIGURE GOOGLE GEMINI API
 # ----------------------------
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])  # Use your Streamlit secret
 MODEL_NAME = "gemini-2.5-flash"
 
 # ----------------------------
@@ -17,6 +17,7 @@ DATA_PATHS = [
     r"data/statutes.json",
     r"data/judgments.json"
 ]
+
 CHAT_HISTORY_FILE = "chat_history.json"
 
 # ----------------------------
@@ -43,40 +44,21 @@ if "chat_sessions" not in st.session_state:
 if "current_chat" not in st.session_state:
     st.session_state["current_chat"] = "General Chat"
 
-# Load persisted chat history
-if os.path.exists(CHAT_HISTORY_FILE):
-    with open(CHAT_HISTORY_FILE, "r", encoding="utf-8") as f:
-        st.session_state["chat_sessions"] = json.load(f)
-
-# Initialize messages for current chat
+# Initialize chat session if not exists
 if st.session_state["current_chat"] not in st.session_state["chat_sessions"]:
     st.session_state["chat_sessions"][st.session_state["current_chat"]] = {"messages": []}
+
 messages = st.session_state["chat_sessions"][st.session_state["current_chat"]]["messages"]
 
 # ----------------------------
-# CHAT THREAD SELECTION
+# CHAT THREAD SELECTION (Private Chats)
 # ----------------------------
 st.sidebar.title("Chats")
-
-# New Chat Button
 if st.sidebar.button("New Chat"):
     chat_name = f"Chat {len(st.session_state['chat_sessions']) + 1}"
     st.session_state["chat_sessions"][chat_name] = {"messages": []}
     st.session_state["current_chat"] = chat_name
     messages = st.session_state["chat_sessions"][st.session_state["current_chat"]]["messages"]
-
-# Delete Current Chat Button
-if st.sidebar.button("Delete Current Chat"):
-    if st.session_state["current_chat"] in st.session_state["chat_sessions"]:
-        del st.session_state["chat_sessions"][st.session_state["current_chat"]]
-        # Start a new chat
-        chat_name = f"Chat {len(st.session_state['chat_sessions']) + 1}" if st.session_state["chat_sessions"] else "General Chat"
-        st.session_state["chat_sessions"][chat_name] = {"messages": []}
-        st.session_state["current_chat"] = chat_name
-        messages = st.session_state["chat_sessions"][st.session_state["current_chat"]]["messages"]
-        # Save updated chat history
-        with open(CHAT_HISTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(st.session_state["chat_sessions"], f, indent=2, ensure_ascii=False)
 
 chat_selection = st.sidebar.selectbox(
     "Select Chat",
@@ -87,33 +69,43 @@ st.session_state["current_chat"] = chat_selection
 messages = st.session_state["chat_sessions"][st.session_state["current_chat"]]["messages"]
 
 # ----------------------------
-# USER INPUT FORM
+# USER INPUT
 # ----------------------------
-with st.form(key="chat_form", clear_on_submit=True):
-    user_input = st.text_input(
-        "Enter your question:",
-        placeholder="Type your question and press Enter",
-        key="input_box"
-    )
-    submit = st.form_submit_button("Send")
+if "input_box_text" not in st.session_state:
+    st.session_state["input_box_text"] = ""
 
-if submit and user_input.strip():
-    # Add user message
-    messages.append({"role": "user", "text": user_input})
+user_input = st.text_area(
+    "Enter your question:",
+    value=st.session_state["input_box_text"],
+    height=100,
+    key="input_box",
+    placeholder="Type your question here..."
+)
 
-    # Build context from local statutes/judgments
-    context_snippets = []
-    for d in legal_docs:
-        text = d.get("text", "")
-        if user_input.lower() in text.lower():
-            context_snippets.append(text)
-    context = "\n".join(context_snippets[:5])
+# ----------------------------
+# SEND BUTTON
+# ----------------------------
+if st.button("Send"):
+    if user_input.strip():
+        # Add user message
+        messages.append({"role": "user", "text": user_input})
 
-    # Build conversation history for AI context
-    full_chat_context = "\n".join([f"{m['role']}: {m['text']}" for m in messages])
+        # Clear input box
+        st.session_state["input_box_text"] = ""
 
-    # Prepare prompt
-    prompt = f"""
+        # Build context from local statutes/judgments
+        context_snippets = []
+        for d in legal_docs:
+            text = d.get("text", "")
+            if user_input.lower() in text.lower():
+                context_snippets.append(text)
+        context = "\n".join(context_snippets[:5])
+
+        # Build conversation history for AI context
+        full_chat_context = "\n".join([f"{m['role']}: {m['text']}" for m in messages])
+
+        # Prepare prompt
+        prompt = f"""
 You are an expert Indian criminal law assistant.
 Use the previous conversation and the following statutes/judgments context to answer
 precisely.
@@ -126,21 +118,21 @@ Question:
 Answer concisely in simple legal terms, citing IPC sections or examples where possible.
 """
 
-    # Generate bot response
-    with st.spinner("Generating response..."):
-        try:
-            model = genai.GenerativeModel(MODEL_NAME)
-            response = model.generate_content(prompt)
-            bot_text = response.text
-        except Exception as e:
-            bot_text = f"❌ Error generating response: {str(e)}"
+        # Generate bot response
+        with st.spinner("Generating response..."):
+            try:
+                model = genai.GenerativeModel(MODEL_NAME)
+                response = model.generate_content(prompt)
+                bot_text = response.text
+            except Exception as e:
+                bot_text = f" Error generating response: {str(e)}"
 
-    # Add bot message
-    messages.append({"role": "bot", "text": bot_text})
+        # Add bot message
+        messages.append({"role": "bot", "text": bot_text})
 
-    # Persist chat history
-    with open(CHAT_HISTORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(st.session_state["chat_sessions"], f, indent=2, ensure_ascii=False)
+        # Persist chat history
+        with open(CHAT_HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(st.session_state["chat_sessions"], f, indent=2, ensure_ascii=False)
 
 # ----------------------------
 # DISPLAY CHAT BUBBLES (DARK MODE)
@@ -148,6 +140,7 @@ Answer concisely in simple legal terms, citing IPC sections or examples where po
 st.markdown("<hr>", unsafe_allow_html=True)
 for msg in messages[-50:]:  # show last 50 messages
     if msg["role"] == "user":
+        # User bubble: right-aligned, dark green
         st.markdown(
             f"""
             <div style="
@@ -168,6 +161,7 @@ for msg in messages[-50:]:  # show last 50 messages
             unsafe_allow_html=True
         )
     else:
+        # Bot bubble: left-aligned, dark gray
         st.markdown(
             f"""
             <div style="
@@ -188,11 +182,20 @@ for msg in messages[-50:]:  # show last 50 messages
             unsafe_allow_html=True
         )
 
-# Scroll to latest message
+# ----------------------------
+# AUTO SCROLL TO LATEST MESSAGE
+# ----------------------------
 st.markdown("<div id='bottom'></div>", unsafe_allow_html=True)
 st.components.v1.html(
-    "<script>document.getElementById('bottom').scrollIntoView();</script>",
-    height=0
+    """
+    <script>
+    var bottom = document.getElementById('bottom');
+    if (bottom) {
+        bottom.scrollIntoView({behavior: 'smooth'});
+    }
+    </script>
+    """,
+    height=0,
 )
 
 # ----------------------------
