@@ -1,12 +1,12 @@
 import streamlit as st
-import google.generativeai as genai
 import json
 import os
+import google.generativeai as genai
 
 # ----------------------------
 # CONFIGURE GOOGLE GEMINI API
 # ----------------------------
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"]) # Replace with your Gemini API key
+genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])  # Use env variable for safety
 MODEL_NAME = "gemini-2.5-flash"
 
 # ----------------------------
@@ -24,55 +24,55 @@ for path in DATA_PATHS:
             legal_docs.extend(json.load(f))
 
 # ----------------------------
-# STREAMLIT UI SETUP
-# ----------------------------
-st.set_page_config(page_title="Criminal Law Chatbot", page_icon="⚖", layout="wide")
-st.markdown(
-    """
-    <style>
-    /* Dark background */
-    .stApp {background-color: #121212; color: white;}
-    /* Text input dark mode */
-    textarea, input {background-color: #1E1E1E; color: white;}
-    /* Scrollbar for chat */
-    div[data-baseweb="base-input"] {color:white;}
-    </style>
-    """, unsafe_allow_html=True
-)
-
-st.title("⚖ Criminal Law Chatbot")
-st.caption("Ask questions about Indian Criminal Law, IPC sections, or legal case references.")
-
-# ----------------------------
-# SESSION STATE FOR MESSAGE HISTORY
+# SESSION STATE INITIALIZATION
 # ----------------------------
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-messages = st.session_state.messages
+if "rerun_needed" not in st.session_state:
+    st.session_state.rerun_needed = False
+
+# Handle safe rerun
+if st.session_state.rerun_needed:
+    st.session_state.rerun_needed = False
+    st.experimental_rerun()
 
 # ----------------------------
-# SIDEBAR CHAT MANAGEMENT
+# STREAMLIT UI CONFIG
 # ----------------------------
-st.sidebar.title("🗂 Chat History")
+st.set_page_config(page_title="Criminal Law Chatbot", page_icon="⚖")
+st.markdown(
+    """
+    <style>
+    .user-bubble {
+        background-color: #1f2937;  /* dark blue-gray */
+        color: white;
+        padding: 10px 15px;
+        border-radius: 15px;
+        max-width: 70%;
+        margin-left: auto;
+        margin-bottom: 5px;
+    }
+    .bot-bubble {
+        background-color: #374151;  /* dark gray */
+        color: white;
+        padding: 10px 15px;
+        border-radius: 15px;
+        max-width: 70%;
+        margin-right: auto;
+        margin-bottom: 5px;
+    }
+    .chat-container {
+        overflow-y: auto;
+        max-height: 500px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
-# Display previous chats grouped by user-bot
-# Each chat is a user message + next bot message
-for i, msg in enumerate(messages):
-    if msg["role"] == "user":
-        with st.sidebar.expander(f"Chat {i//2 + 1}: {msg['text'][:30]}...", expanded=False):
-            st.write("*User:*", msg["text"])
-            if i + 1 < len(messages) and messages[i + 1]["role"] == "bot":
-                st.write("*Bot:*", messages[i + 1]["text"])
-            # Delete button
-            if st.button("Delete this chat", key=f"del_{i}"):
-                # Remove user + bot
-                to_delete = [i]
-                if i + 1 < len(messages) and messages[i + 1]["role"] == "bot":
-                    to_delete.append(i + 1)
-                for idx in sorted(to_delete, reverse=True):
-                    messages.pop(idx)
-                st.experimental_rerun()
+st.title("⚖ Criminal Law Chatbot")
+st.caption("Ask questions about Indian Criminal Law, IPC sections, or legal case references.")
 
 # ----------------------------
 # USER INPUT
@@ -84,13 +84,9 @@ query = st.text_area(
     key="query_input"
 )
 
-# Send button
 if st.button("Send", key="send_button"):
     if query.strip():
-        # Add user message
-        messages.append({"role": "user", "text": query})
-
-        # Build context from local docs
+        # Build context from local legal docs
         context_snippets = []
         for d in legal_docs:
             text = d.get("text", "")
@@ -98,7 +94,6 @@ if st.button("Send", key="send_button"):
                 context_snippets.append(text)
         context = "\n".join(context_snippets[:5])
 
-        # Prepare prompt for Gemini
         prompt = f"""
 You are an expert Indian criminal law assistant.
 Use the following context from statutes and judgments (if relevant) to answer precisely.
@@ -112,73 +107,52 @@ Question:
 Answer concisely in simple legal terms, citing IPC sections or examples where possible.
 """
 
-        with st.spinner("Generating response..."):
-            try:
-                model = genai.GenerativeModel(MODEL_NAME)
-                response = model.generate_content(prompt)
-                bot_text = response.text.strip()
-            except Exception as e:
-                bot_text = f"❌ Error generating response: {e}"
+        # Add user message
+        st.session_state.messages.append({"role": "user", "text": query})
 
-        messages.append({"role": "bot", "text": bot_text})
-        st.experimental_rerun()
+        # Generate response from Gemini
+        try:
+            model = genai.GenerativeModel(MODEL_NAME)
+            response = model.generate_content(prompt)
+            bot_text = response.text
+        except Exception as e:
+            bot_text = f"❌ Error generating response: {e}"
 
-# ----------------------------
-# DISPLAY CHAT BUBBLES
-# ----------------------------
-chat_container = st.container()
-with chat_container:
-    for msg in messages[-50:]:  # last 50 messages
-        if msg["role"] == "user":
-            st.markdown(
-                f"""
-                <div style="
-                    text-align:right;
-                    background-color:#1E4620;
-                    color:white;
-                    border-radius:15px;
-                    padding:10px;
-                    margin:5px;
-                    display:inline-block;
-                    max-width:80%;
-                    float:right;
-                    clear:both;
-                ">{msg['text']}</div>
-                <div style="clear:both;"></div>
-                """,
-                unsafe_allow_html=True
-            )
-        else:
-            st.markdown(
-                f"""
-                <div style="
-                    text-align:left;
-                    background-color:#2C2C2C;
-                    color:white;
-                    border-radius:15px;
-                    padding:10px;
-                    margin:5px;
-                    display:inline-block;
-                    max-width:80%;
-                    float:left;
-                    clear:both;
-                ">{msg['text']}</div>
-                <div style="clear:both;"></div>
-                """,
-                unsafe_allow_html=True
-            )
+        st.session_state.messages.append({"role": "bot", "text": bot_text})
 
 # ----------------------------
-# AUTOSCROLL TO LATEST MESSAGE
+# DISPLAY CHAT
 # ----------------------------
-scroll_anchor = st.empty()
-scroll_anchor.markdown(
-    "<div id='scroll_anchor'></div><script>var el=document.getElementById('scroll_anchor'); el.scrollIntoView({behavior:'smooth'});</script>",
-    unsafe_allow_html=True
-)
+st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+for i, msg in enumerate(st.session_state.messages):
+    if msg["role"] == "user":
+        st.markdown(f'<div class="user-bubble">{msg["text"]}</div>', unsafe_allow_html=True)
+    else:
+        st.markdown(f'<div class="bot-bubble">{msg["text"]}</div>', unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
+
+# ----------------------------
+# SIDEBAR - DELETE CHATS
+# ----------------------------
+st.sidebar.title("Chat Controls")
+for i, msg in enumerate(st.session_state.messages):
+    if msg["role"] == "user":
+        if st.sidebar.button(f"Delete chat {i+1}", key=f"del_{i}"):
+            # Remove user + bot response
+            to_delete = [i]
+            if i+1 < len(st.session_state.messages) and st.session_state.messages[i+1]["role"] == "bot":
+                to_delete.append(i+1)
+            for idx in sorted(to_delete, reverse=True):
+                st.session_state.messages.pop(idx)
+            st.session_state.rerun_needed = True
+
+st.sidebar.markdown("---")
+if st.sidebar.button("Clear all chats"):
+    st.session_state.messages = []
+    st.session_state.rerun_needed = True
 
 # ----------------------------
 # FOOTER
 # ----------------------------
 st.markdown("---")
-st.markdown("👨‍⚖ Developed by Team BroCode")
+st.markdown("👨‍⚖ Developed by Team BroCode — MIT ADT University")
