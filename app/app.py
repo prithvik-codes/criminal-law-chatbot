@@ -57,11 +57,26 @@ messages = st.session_state["chat_sessions"][st.session_state["current_chat"]]["
 # CHAT THREAD SELECTION
 # ----------------------------
 st.sidebar.title("Chats")
+
+# New Chat Button
 if st.sidebar.button("New Chat"):
     chat_name = f"Chat {len(st.session_state['chat_sessions']) + 1}"
     st.session_state["chat_sessions"][chat_name] = {"messages": []}
     st.session_state["current_chat"] = chat_name
     messages = st.session_state["chat_sessions"][st.session_state["current_chat"]]["messages"]
+
+# Delete Current Chat Button
+if st.sidebar.button("Delete Current Chat"):
+    if st.session_state["current_chat"] in st.session_state["chat_sessions"]:
+        del st.session_state["chat_sessions"][st.session_state["current_chat"]]
+        # Start a new chat
+        chat_name = f"Chat {len(st.session_state['chat_sessions']) + 1}" if st.session_state["chat_sessions"] else "General Chat"
+        st.session_state["chat_sessions"][chat_name] = {"messages": []}
+        st.session_state["current_chat"] = chat_name
+        messages = st.session_state["chat_sessions"][st.session_state["current_chat"]]["messages"]
+        # Save updated chat history
+        with open(CHAT_HISTORY_FILE, "w", encoding="utf-8") as f:
+            json.dump(st.session_state["chat_sessions"], f, indent=2, ensure_ascii=False)
 
 chat_selection = st.sidebar.selectbox(
     "Select Chat",
@@ -133,7 +148,6 @@ Answer concisely in simple legal terms, citing IPC sections or examples where po
 st.markdown("<hr>", unsafe_allow_html=True)
 for msg in messages[-50:]:  # show last 50 messages
     if msg["role"] == "user":
-        # User bubble: right-aligned, dark green
         st.markdown(
             f"""
             <div style="
@@ -154,7 +168,6 @@ for msg in messages[-50:]:  # show last 50 messages
             unsafe_allow_html=True
         )
     else:
-        # Bot bubble: left-aligned, dark gray
         st.markdown(
             f"""
             <div style="
