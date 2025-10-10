@@ -1,3 +1,4 @@
+# app.py
 import streamlit as st
 import google.generativeai as genai
 import json
@@ -6,13 +7,17 @@ import os
 # ----------------------------
 # CONFIGURE GOOGLE GEMINI API
 # ----------------------------
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])  # store your API key in .streamlit/secrets.toml
+genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])  # Load from environment variable
 MODEL_NAME = "gemini-2.5-flash"
 
 # ----------------------------
 # LOAD LOCAL LEGAL DATA
 # ----------------------------
-DATA_PATHS = ["data/statutes.json", "data/judgments.json"]
+DATA_PATHS = [
+    r"data/statutes.json",
+    r"data/judgments.json",
+]
+
 legal_docs = []
 for path in DATA_PATHS:
     if os.path.exists(path):
@@ -20,89 +25,106 @@ for path in DATA_PATHS:
             legal_docs.extend(json.load(f))
 
 # ----------------------------
-# STREAMLIT UI CONFIG
+# INITIALIZE SESSION STATE
+# ----------------------------
+if "chat_sessions" not in st.session_state:
+    st.session_state["chat_sessions"] = [{"name": "New Chat", "messages": []}]
+if "current_chat" not in st.session_state:
+    st.session_state["current_chat"] = 0
+
+# ----------------------------
+# STREAMLIT PAGE CONFIG
 # ----------------------------
 st.set_page_config(page_title="Criminal Law Chatbot", page_icon="⚖", layout="wide")
 st.title("⚖ Criminal Law Chatbot")
-st.caption("Ask questions about Indian Criminal Law, IPC sections, or legal case references.")
+st.caption("Ask questions about Indian Criminal Law, IPC sections, or case judgments.")
 
 # ----------------------------
-# SESSION STATE FOR CHAT
-# ----------------------------
-if "messages" not in st.session_state:
-    st.session_state["messages"] = []
-
-# ----------------------------
-# SIDEBAR: Suggested Questions & Reset
+# SIDEBAR: CHAT SESSIONS
 # ----------------------------
 with st.sidebar:
-    st.header("⚖ Quick Actions")
-    if st.button("Reset Chat"):
-        st.session_state["messages"] = []
+    st.header("💬 Your Chats")
+    chat_names = [c["name"] for c in st.session_state["chat_sessions"]]
+    choice = st.selectbox("Switch Chat:", chat_names, index=st.session_state["current_chat"])
+    st.session_state["current_chat"] = chat_names.index(choice)
 
+    if st.button("➕ New Chat"):
+        st.session_state["chat_sessions"].append({"name": f"New Chat {len(chat_names)+1}", "messages": []})
+        st.session_state["current_chat"] = len(st.session_state["chat_sessions"]) - 1
+        st.experimental_rerun()
+
+    if st.button("🗑 Clear Current Chat"):
+        st.session_state["chat_sessions"][st.session_state["current_chat"]]["messages"] = []
+        st.experimental_rerun()
+
+# ----------------------------
+# DISPLAY CHAT MESSAGES
+# ----------------------------
+chat_container = st.container()
+messages = st.session_state["chat_sessions"][st.session_state["current_chat"]]["messages"]
+
+with chat_container:
+    for msg in messages:
+        if msg["role"] == "user":
+            st.markdown(
+                f'<div style="text-align:right; background-color:#DCF8C6; padding:10px; border-radius:12px; margin:5px; max-width:70%; float:right; clear:both;">{msg["text"]}</div>',
+                unsafe_allow_html=True
+            )
+        else:  # bot
+            st.markdown(
+                f'<div style="text-align:left; background-color:#F1F0F0; padding:10px; border-radius:12px; margin:5px; max-width:70%; float:left; clear:both;">{msg["text"]}</div>',
+                unsafe_allow_html=True
+            )
+    st.markdown("<br>", unsafe_allow_html=True)  # spacing at bottom
 
 # ----------------------------
 # USER INPUT
 # ----------------------------
-query = st.text_area("Ask your legal question:", height=100, key="query_input")
+user_input = st.text_area("Type your question here:", height=100, key="query_input")
 if st.button("Send"):
-    if query.strip():
-        # Add user message to session
-        st.session_state["messages"].append({"role": "user", "text": query})
+    if user_input.strip():
+        # Add user message
+        messages.append({"role": "user", "text": user_input})
 
         # ----------------------------
-        # BUILD CONTEXT FROM LOCAL DATA
+        # OPTIONAL: build context from local statutes/judgments
         # ----------------------------
-        context_snippets = [
-            d.get("text", "") for d in legal_docs
-            if query.lower() in d.get("text", "").lower()
-        ]
-        context = "\n".join(context_snippets[:3])  # top 3 matches
+        context_snippets = []
+        for d in legal_docs:
+            text = d.get("text", "")
+            if user_input.lower() in text.lower():
+                context_snippets.append(text)
+        context = "\n".join(context_snippets[:5])
 
         # ----------------------------
-        # BUILD PROMPT FOR GEMINI
+        # GENERATE BOT RESPONSE USING GEMINI
         # ----------------------------
-        chat_history = ""
-        for msg in st.session_state["messages"][-6:]:  # last 6 messages
-            role = "User" if msg["role"] == "user" else "Assistant"
-            chat_history += f"{role}: {msg['text']}\n"
-
         prompt = f"""
 You are an expert Indian criminal law assistant.
-Use the following context from statutes and judgments (if relevant) to answer accurately.
+Use the following context from statutes and judgments (if relevant) to answer precisely.
 
 Context:
-{context or "No relevant context found."}
+{context or "No relevant context found in local data."}
 
-Conversation so far:
-{chat_history}
+Question:
+{user_input}
 
-Answer the user's latest question concisely, in simple legal terms, citing IPC sections or examples where possible.
+Answer concisely in simple legal terms, citing IPC sections or examples where possible.
 """
+        with st.spinner("Generating response..."):
+            try:
+                model = genai.GenerativeModel(MODEL_NAME)
+                response = model.generate_content(prompt)
+                bot_text = response.text
+            except Exception as e:
+                bot_text = f"❌ Error generating response: {str(e)}"
 
-        # ----------------------------
-        # GENERATE RESPONSE
-        # ----------------------------
-        try:
-            model = genai.GenerativeModel(MODEL_NAME)
-            response = model.generate_content(prompt)
-            answer = response.text.strip()
-        except Exception as e:
-            answer = "⚠ Error generating response. Please try again."
-
-        st.session_state["messages"].append({"role": "assistant", "text": answer})
-
-# ----------------------------
-# DISPLAY CHAT HISTORY AS BUBBLES
-# ----------------------------
-for msg in st.session_state["messages"]:
-    if msg["role"] == "user":
-        st.chat_message("user").write(msg["text"])
-    else:
-        st.chat_message("assistant").write(msg["text"])
+        # Add bot message
+        messages.append({"role": "bot", "text": bot_text})
+        st.experimental_rerun()
 
 # ----------------------------
 # FOOTER
 # ----------------------------
 st.markdown("---")
-st.markdown("👨‍⚖ Developed by Team BroCode — MIT ADT University")
+st.markdown("👨‍⚖ Developed by Team BroCode — Criminal Law Chatbot")
