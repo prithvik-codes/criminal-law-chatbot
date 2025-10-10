@@ -128,18 +128,18 @@ Answer concisely in simple legal terms, citing IPC sections or examples where po
             json.dump(st.session_state["chat_sessions"], f, indent=2, ensure_ascii=False)
 
 # ----------------------------
-# DISPLAY CHAT BUBBLES (DARK MODE)
+# DISPLAY CHAT BUBBLES WITH AUTOSCROLL
 # ----------------------------
 st.markdown("<hr>", unsafe_allow_html=True)
+
 for msg in messages[-50:]:  # show last 50 messages
     if msg["role"] == "user":
-        # User bubble: right-aligned, dark green
         st.markdown(
             f"""
             <div style="
                 text-align:right;
-                background-color:#1E4620;  /* dark green */
-                color:#FFFFFF;             /* white text */
+                background-color:#1E4620;
+                color:#FFFFFF;
                 border-radius:15px;
                 padding:10px;
                 margin:5px;
@@ -154,13 +154,12 @@ for msg in messages[-50:]:  # show last 50 messages
             unsafe_allow_html=True
         )
     else:
-        # Bot bubble: left-aligned, dark gray
         st.markdown(
             f"""
             <div style="
                 text-align:left;
-                background-color:#2C2C2C;  /* dark gray */
-                color:#FFFFFF;             /* white text */
+                background-color:#2C2C2C;
+                color:#FFFFFF;
                 border-radius:15px;
                 padding:10px;
                 margin:5px;
@@ -175,10 +174,21 @@ for msg in messages[-50:]:  # show last 50 messages
             unsafe_allow_html=True
         )
 
-# Scroll to latest message
+# ----------------------------
+# AUTOSCROLL TO LATEST MESSAGE
+# ----------------------------
 st.markdown("<div id='bottom'></div>", unsafe_allow_html=True)
-st.components.v1.html("<script>document.getElementById('bottom').scrollIntoView();</script>", height=0)
-
+st.components.v1.html(
+    """
+    <script>
+        var bottom = document.getElementById('bottom');
+        if(bottom){
+            bottom.scrollIntoView({behavior: 'smooth'});
+        }
+    </script>
+    """,
+    height=0,
+)
 # ----------------------------
 # FOOTER
 # ----------------------------
