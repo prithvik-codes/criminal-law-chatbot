@@ -15,7 +15,7 @@ MODEL_NAME = "gemini-2.5-flash"
 # STREAMLIT CONFIG
 # ----------------------------
 st.set_page_config(page_title="Criminal Law Chatbot", page_icon="⚖")
-st.title("⚖ Criminal Law Chatbot")
+st.title("📜🤖 Criminal Law Chatbot")
 st.caption("Ask questions about Indian Criminal Law, IPC sections, or legal case references.")
 
 # ----------------------------
