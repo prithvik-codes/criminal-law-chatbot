@@ -1,4 +1,3 @@
-# app.py
 import streamlit as st
 import google.generativeai as genai
 import json
@@ -7,21 +6,17 @@ import os
 # ----------------------------
 # CONFIGURE GOOGLE GEMINI API
 # ----------------------------
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"]) # Replace with your real API key
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"]) # Replace with your Gemini API key
 MODEL_NAME = "gemini-2.5-flash"
 
 # ----------------------------
-# FILE PATHS
+# LOAD LOCAL LEGAL DATA
 # ----------------------------
 DATA_PATHS = [
     r"data/statutes.json",
-    r"data/judgments.json"
+    r"data/judgments.json",
 ]
-CHAT_HISTORY_FILE = "chat_history.json"
 
-# ----------------------------
-# LOAD LEGAL DATA
-# ----------------------------
 legal_docs = []
 for path in DATA_PATHS:
     if os.path.exists(path):
@@ -29,168 +24,161 @@ for path in DATA_PATHS:
             legal_docs.extend(json.load(f))
 
 # ----------------------------
-# STREAMLIT CONFIG
+# STREAMLIT UI SETUP
 # ----------------------------
-st.set_page_config(page_title="Criminal Law Chatbot", page_icon="⚖")
+st.set_page_config(page_title="Criminal Law Chatbot", page_icon="⚖", layout="wide")
+st.markdown(
+    """
+    <style>
+    /* Dark background */
+    .stApp {background-color: #121212; color: white;}
+    /* Text input dark mode */
+    textarea, input {background-color: #1E1E1E; color: white;}
+    /* Scrollbar for chat */
+    div[data-baseweb="base-input"] {color:white;}
+    </style>
+    """, unsafe_allow_html=True
+)
+
 st.title("⚖ Criminal Law Chatbot")
 st.caption("Ask questions about Indian Criminal Law, IPC sections, or legal case references.")
 
 # ----------------------------
-# SESSION STATE INITIALIZATION
+# SESSION STATE FOR MESSAGE HISTORY
 # ----------------------------
-if "chat_sessions" not in st.session_state:
-    st.session_state["chat_sessions"] = {}
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-if "current_chat" not in st.session_state:
-    st.session_state["current_chat"] = "General Chat"
-
-# Load persisted chat history
-if os.path.exists(CHAT_HISTORY_FILE):
-    with open(CHAT_HISTORY_FILE, "r", encoding="utf-8") as f:
-        st.session_state["chat_sessions"] = json.load(f)
-
-# Initialize messages for current chat
-if st.session_state["current_chat"] not in st.session_state["chat_sessions"]:
-    st.session_state["chat_sessions"][st.session_state["current_chat"]] = {"messages": []}
-
-messages = st.session_state["chat_sessions"][st.session_state["current_chat"]]["messages"]
+messages = st.session_state.messages
 
 # ----------------------------
-# CHAT THREAD SELECTION
+# SIDEBAR CHAT MANAGEMENT
 # ----------------------------
-st.sidebar.title("Chats")
-if st.sidebar.button("New Chat"):
-    chat_name = f"Chat {len(st.session_state['chat_sessions']) + 1}"
-    st.session_state["chat_sessions"][chat_name] = {"messages": []}
-    st.session_state["current_chat"] = chat_name
-    messages = st.session_state["chat_sessions"][st.session_state["current_chat"]]["messages"]
+st.sidebar.title("🗂 Chat History")
 
-chat_selection = st.sidebar.selectbox("Select Chat", list(st.session_state["chat_sessions"].keys()),
-                                      index=list(st.session_state["chat_sessions"].keys()).index(st.session_state["current_chat"]))
-st.session_state["current_chat"] = chat_selection
-messages = st.session_state["chat_sessions"][st.session_state["current_chat"]]["messages"]
+# Display previous chats grouped by user-bot
+# Each chat is a user message + next bot message
+for i, msg in enumerate(messages):
+    if msg["role"] == "user":
+        with st.sidebar.expander(f"Chat {i//2 + 1}: {msg['text'][:30]}...", expanded=False):
+            st.write("*User:*", msg["text"])
+            if i + 1 < len(messages) and messages[i + 1]["role"] == "bot":
+                st.write("*Bot:*", messages[i + 1]["text"])
+            # Delete button
+            if st.button("Delete this chat", key=f"del_{i}"):
+                # Remove user + bot
+                to_delete = [i]
+                if i + 1 < len(messages) and messages[i + 1]["role"] == "bot":
+                    to_delete.append(i + 1)
+                for idx in sorted(to_delete, reverse=True):
+                    messages.pop(idx)
+                st.experimental_rerun()
 
 # ----------------------------
 # USER INPUT
 # ----------------------------
-user_input = st.text_area("Enter your question:", height=100, key="input_box")
+query = st.text_area(
+    "Enter your legal question:",
+    height=100,
+    placeholder="e.g., What is Section 378 of IPC?",
+    key="query_input"
+)
 
-# ----------------------------
-# SEND BUTTON
-# ----------------------------
-if st.button("Send"):
-    if user_input.strip():
+# Send button
+if st.button("Send", key="send_button"):
+    if query.strip():
         # Add user message
-        messages.append({"role": "user", "text": user_input})
+        messages.append({"role": "user", "text": query})
 
-        # Build context from local statutes/judgments
+        # Build context from local docs
         context_snippets = []
         for d in legal_docs:
             text = d.get("text", "")
-            if user_input.lower() in text.lower():
+            if query.lower() in text.lower():
                 context_snippets.append(text)
         context = "\n".join(context_snippets[:5])
 
-        # Build conversation history for AI context
-        full_chat_context = "\n".join([f"{m['role']}: {m['text']}" for m in messages])
-
-        # Prepare prompt
+        # Prepare prompt for Gemini
         prompt = f"""
 You are an expert Indian criminal law assistant.
-Use the previous conversation and the following statutes/judgments context to answer precisely.
+Use the following context from statutes and judgments (if relevant) to answer precisely.
 
-Conversation history:
-{full_chat_context}
-
-Context from local data:
-{context or "No relevant context found"}
+Context:
+{context or "No relevant context found in local data."}
 
 Question:
-{user_input}
+{query}
 
 Answer concisely in simple legal terms, citing IPC sections or examples where possible.
 """
 
-        # Generate bot response
         with st.spinner("Generating response..."):
             try:
                 model = genai.GenerativeModel(MODEL_NAME)
                 response = model.generate_content(prompt)
-                bot_text = response.text
+                bot_text = response.text.strip()
             except Exception as e:
-                bot_text = f"❌ Error generating response: {str(e)}"
+                bot_text = f"❌ Error generating response: {e}"
 
-        # Add bot message
         messages.append({"role": "bot", "text": bot_text})
-
-        # Persist chat history
-        with open(CHAT_HISTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(st.session_state["chat_sessions"], f, indent=2, ensure_ascii=False)
+        st.experimental_rerun()
 
 # ----------------------------
-# DISPLAY CHAT BUBBLES WITH AUTOSCROLL
+# DISPLAY CHAT BUBBLES
 # ----------------------------
-st.markdown("<hr>", unsafe_allow_html=True)
-
-for msg in messages[-50:]:  # show last 50 messages
-    if msg["role"] == "user":
-        st.markdown(
-            f"""
-            <div style="
-                text-align:right;
-                background-color:#1E4620;
-                color:#FFFFFF;
-                border-radius:15px;
-                padding:10px;
-                margin:5px;
-                display:inline-block;
-                max-width:80%;
-                font-size:14px;
-                float:right;
-                clear:both;
-            ">{msg['text']}</div>
-            <div style="clear:both;"></div>
-            """,
-            unsafe_allow_html=True
-        )
-    else:
-        st.markdown(
-            f"""
-            <div style="
-                text-align:left;
-                background-color:#2C2C2C;
-                color:#FFFFFF;
-                border-radius:15px;
-                padding:10px;
-                margin:5px;
-                display:inline-block;
-                max-width:80%;
-                font-size:14px;
-                float:left;
-                clear:both;
-            ">{msg['text']}</div>
-            <div style="clear:both;"></div>
-            """,
-            unsafe_allow_html=True
-        )
+chat_container = st.container()
+with chat_container:
+    for msg in messages[-50:]:  # last 50 messages
+        if msg["role"] == "user":
+            st.markdown(
+                f"""
+                <div style="
+                    text-align:right;
+                    background-color:#1E4620;
+                    color:white;
+                    border-radius:15px;
+                    padding:10px;
+                    margin:5px;
+                    display:inline-block;
+                    max-width:80%;
+                    float:right;
+                    clear:both;
+                ">{msg['text']}</div>
+                <div style="clear:both;"></div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                f"""
+                <div style="
+                    text-align:left;
+                    background-color:#2C2C2C;
+                    color:white;
+                    border-radius:15px;
+                    padding:10px;
+                    margin:5px;
+                    display:inline-block;
+                    max-width:80%;
+                    float:left;
+                    clear:both;
+                ">{msg['text']}</div>
+                <div style="clear:both;"></div>
+                """,
+                unsafe_allow_html=True
+            )
 
 # ----------------------------
 # AUTOSCROLL TO LATEST MESSAGE
 # ----------------------------
-st.markdown("<div id='bottom'></div>", unsafe_allow_html=True)
-st.components.v1.html(
-    """
-    <script>
-        var bottom = document.getElementById('bottom');
-        if(bottom){
-            bottom.scrollIntoView({behavior: 'smooth'});
-        }
-    </script>
-    """,
-    height=0,
+scroll_anchor = st.empty()
+scroll_anchor.markdown(
+    "<div id='scroll_anchor'></div><script>var el=document.getElementById('scroll_anchor'); el.scrollIntoView({behavior:'smooth'});</script>",
+    unsafe_allow_html=True
 )
+
 # ----------------------------
 # FOOTER
 # ----------------------------
 st.markdown("---")
-st.markdown("👨‍⚖ Developed by Team BroCode — MIT ADT University")
+st.markdown("👨‍⚖ Developed by Team BroCode")
