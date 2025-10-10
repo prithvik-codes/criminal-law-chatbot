@@ -7,7 +7,7 @@ import os
 # ----------------------------
 # CONFIGURE GOOGLE GEMINI API
 # ----------------------------
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"])  # Replace with your real API key
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 MODEL_NAME = "gemini-2.5-flash"
 
 # ----------------------------
@@ -51,7 +51,6 @@ if os.path.exists(CHAT_HISTORY_FILE):
 # Initialize messages for current chat
 if st.session_state["current_chat"] not in st.session_state["chat_sessions"]:
     st.session_state["chat_sessions"][st.session_state["current_chat"]] = {"messages": []}
-
 messages = st.session_state["chat_sessions"][st.session_state["current_chat"]]["messages"]
 
 # ----------------------------
@@ -73,22 +72,17 @@ st.session_state["current_chat"] = chat_selection
 messages = st.session_state["chat_sessions"][st.session_state["current_chat"]]["messages"]
 
 # ----------------------------
-# USER INPUT
+# USER INPUT FORM
 # ----------------------------
-if "input_box_text" not in st.session_state:
-    st.session_state["input_box_text"] = ""
+with st.form(key="chat_form", clear_on_submit=True):
+    user_input = st.text_input(
+        "Enter your question:",
+        placeholder="Type your question and press Enter",
+        key="input_box"
+    )
+    submit = st.form_submit_button("Send")
 
-user_input = st.text_input(
-    "Enter your question:",
-    value=st.session_state["input_box_text"],
-    key="input_box_text",
-    placeholder="Type your question and press Enter"
-)
-
-# ----------------------------
-# SEND MESSAGE AUTOMATICALLY
-# ----------------------------
-if user_input.strip():
+if submit and user_input.strip():
     # Add user message
     messages.append({"role": "user", "text": user_input})
 
@@ -129,9 +123,6 @@ Answer concisely in simple legal terms, citing IPC sections or examples where po
     # Add bot message
     messages.append({"role": "bot", "text": bot_text})
 
-    # Clear the input box
-    st.session_state["input_box_text"] = ""
-
     # Persist chat history
     with open(CHAT_HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(st.session_state["chat_sessions"], f, indent=2, ensure_ascii=False)
@@ -140,8 +131,9 @@ Answer concisely in simple legal terms, citing IPC sections or examples where po
 # DISPLAY CHAT BUBBLES (DARK MODE)
 # ----------------------------
 st.markdown("<hr>", unsafe_allow_html=True)
-for msg in messages[-50:]:
+for msg in messages[-50:]:  # show last 50 messages
     if msg["role"] == "user":
+        # User bubble: right-aligned, dark green
         st.markdown(
             f"""
             <div style="
@@ -162,6 +154,7 @@ for msg in messages[-50:]:
             unsafe_allow_html=True
         )
     else:
+        # Bot bubble: left-aligned, dark gray
         st.markdown(
             f"""
             <div style="
@@ -193,4 +186,4 @@ st.components.v1.html(
 # FOOTER
 # ----------------------------
 st.markdown("---")
-st.markdown("⚖ Developed by Team BroCode — MIT ADT University")
+st.markdown(" ⚖ Developed by Team BroCode — MIT ADT University")
