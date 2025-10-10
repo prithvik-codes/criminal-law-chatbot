@@ -3,6 +3,7 @@ import streamlit as st
 import google.generativeai as genai
 import json
 import os
+import uuid
 
 # ----------------------------
 # CONFIGURE GOOGLE GEMINI API
@@ -11,13 +12,27 @@ genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 MODEL_NAME = "gemini-2.5-flash"
 
 # ----------------------------
+# STREAMLIT CONFIG
+# ----------------------------
+st.set_page_config(page_title="Criminal Law Chatbot", page_icon="⚖")
+st.title("⚖ Criminal Law Chatbot")
+st.caption("Ask questions about Indian Criminal Law, IPC sections, or legal case references.")
+
+# ----------------------------
+# USER SESSION (per user chat history)
+# ----------------------------
+if "user_id" not in st.session_state:
+    st.session_state["user_id"] = str(uuid.uuid4())[:8]  # short unique ID per user
+
+CHAT_HISTORY_FILE = f"chat_history_{st.session_state['user_id']}.json"
+
+# ----------------------------
 # FILE PATHS
 # ----------------------------
 DATA_PATHS = [
     r"data/statutes.json",
     r"data/judgments.json"
 ]
-CHAT_HISTORY_FILE = "chat_history.json"
 
 # ----------------------------
 # LOAD LEGAL DATA
@@ -29,13 +44,6 @@ for path in DATA_PATHS:
             legal_docs.extend(json.load(f))
 
 # ----------------------------
-# STREAMLIT CONFIG
-# ----------------------------
-st.set_page_config(page_title="Criminal Law Chatbot", page_icon="⚖")
-st.title("⚖ Criminal Law Chatbot")
-st.caption("Ask questions about Indian Criminal Law, IPC sections, or legal case references.")
-
-# ----------------------------
 # SESSION STATE INITIALIZATION
 # ----------------------------
 if "chat_sessions" not in st.session_state:
@@ -43,7 +51,7 @@ if "chat_sessions" not in st.session_state:
 if "current_chat" not in st.session_state:
     st.session_state["current_chat"] = "General Chat"
 
-# Load persisted chat history
+# Load persisted chat history (per user)
 if os.path.exists(CHAT_HISTORY_FILE):
     with open(CHAT_HISTORY_FILE, "r", encoding="utf-8") as f:
         st.session_state["chat_sessions"] = json.load(f)
@@ -138,7 +146,7 @@ Answer concisely in simple legal terms, citing IPC sections or examples where po
     # Add bot message
     messages.append({"role": "bot", "text": bot_text})
 
-    # Persist chat history
+    # Persist chat history (per user)
     with open(CHAT_HISTORY_FILE, "w", encoding="utf-8") as f:
         json.dump(st.session_state["chat_sessions"], f, indent=2, ensure_ascii=False)
 
