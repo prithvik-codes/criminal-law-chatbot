@@ -7,7 +7,7 @@ import os
 # ----------------------------
 # CONFIGURE GOOGLE GEMINI API
 # ----------------------------
-genai.configure(api_key=st.secrets["GEMINI_API_KEY"]) # Replace with your real API key
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 MODEL_NAME = "gemini-2.5-flash"
 
 # ----------------------------
@@ -17,7 +17,6 @@ DATA_PATHS = [
     r"data/statutes.json",
     r"data/judgments.json"
 ]
-CHAT_HISTORY_FILE = "chat_history.json"
 
 # ----------------------------
 # LOAD LEGAL DATA
@@ -40,35 +39,39 @@ st.caption("Ask questions about Indian Criminal Law, IPC sections, or legal case
 # ----------------------------
 if "chat_sessions" not in st.session_state:
     st.session_state["chat_sessions"] = {}
-
 if "current_chat" not in st.session_state:
     st.session_state["current_chat"] = "General Chat"
-
-# Load persisted chat history
-if os.path.exists(CHAT_HISTORY_FILE):
-    with open(CHAT_HISTORY_FILE, "r", encoding="utf-8") as f:
-        st.session_state["chat_sessions"] = json.load(f)
 
 # Initialize messages for current chat
 if st.session_state["current_chat"] not in st.session_state["chat_sessions"]:
     st.session_state["chat_sessions"][st.session_state["current_chat"]] = {"messages": []}
-
 messages = st.session_state["chat_sessions"][st.session_state["current_chat"]]["messages"]
 
 # ----------------------------
-# CHAT THREAD SELECTION
+# CHAT THREAD SELECTION WITH DELETE
 # ----------------------------
 st.sidebar.title("Chats")
+
+# New chat button
 if st.sidebar.button("New Chat"):
     chat_name = f"Chat {len(st.session_state['chat_sessions']) + 1}"
-    st.session_state["chat_sessions"][chat_name] = {"messages": []}
+    st.session_state['chat_sessions'][chat_name] = {"messages": []}
     st.session_state["current_chat"] = chat_name
-    messages = st.session_state["chat_sessions"][st.session_state["current_chat"]]["messages"]
+    messages = st.session_state['chat_sessions'][chat_name]["messages"]
 
-chat_selection = st.sidebar.selectbox("Select Chat", list(st.session_state["chat_sessions"].keys()),
-                                      index=list(st.session_state["chat_sessions"].keys()).index(st.session_state["current_chat"]))
-st.session_state["current_chat"] = chat_selection
-messages = st.session_state["chat_sessions"][st.session_state["current_chat"]]["messages"]
+# List chats with delete buttons
+chat_keys = list(st.session_state["chat_sessions"].keys())
+for chat_name in chat_keys:
+    col1, col2 = st.sidebar.columns([4, 1])
+    if col1.button(chat_name):
+        st.session_state["current_chat"] = chat_name
+        messages = st.session_state['chat_sessions'][chat_name]["messages"]
+    if col2.button("🗑", key=f"del_{chat_name}"):
+        st.session_state['chat_sessions'].pop(chat_name)
+        if st.session_state.get("current_chat") == chat_name:
+            st.session_state["current_chat"] = list(st.session_state['chat_sessions'].keys())[0] \
+                if st.session_state['chat_sessions'] else "General Chat"
+        st.experimental_rerun()
 
 # ----------------------------
 # USER INPUT
@@ -97,17 +100,14 @@ if st.button("Send"):
         # Prepare prompt
         prompt = f"""
 You are an expert Indian criminal law assistant.
-Use the previous conversation and the following statutes/judgments context to answer precisely.
-
+Use the previous conversation and the following statutes/judgments context to answer
+precisely.
 Conversation history:
 {full_chat_context}
-
 Context from local data:
 {context or "No relevant context found"}
-
 Question:
 {user_input}
-
 Answer concisely in simple legal terms, citing IPC sections or examples where possible.
 """
 
@@ -123,55 +123,49 @@ Answer concisely in simple legal terms, citing IPC sections or examples where po
         # Add bot message
         messages.append({"role": "bot", "text": bot_text})
 
-        # Persist chat history
-        with open(CHAT_HISTORY_FILE, "w", encoding="utf-8") as f:
-            json.dump(st.session_state["chat_sessions"], f, indent=2, ensure_ascii=False)
-
 # ----------------------------
 # DISPLAY CHAT BUBBLES (DARK MODE)
 # ----------------------------
 st.markdown("<hr>", unsafe_allow_html=True)
-for msg in messages[-50:]:  # show last 50 messages
+for msg in messages[-50:]:  # last 50 messages
     if msg["role"] == "user":
-        # User bubble: right-aligned, dark green
         st.markdown(
             f"""
-            <div style="
-                text-align:right;
-                background-color:#1E4620;  /* dark green */
-                color:#FFFFFF;             /* white text */
-                border-radius:15px;
-                padding:10px;
-                margin:5px;
-                display:inline-block;
-                max-width:80%;
-                font-size:14px;
-                float:right;
-                clear:both;
-            ">{msg['text']}</div>
-            <div style="clear:both;"></div>
-            """,
+<div style="
+text-align:right;
+background-color:#1E4620;
+color:#FFFFFF;
+border-radius:15px;
+padding:10px;
+margin:5px;
+display:inline-block;
+max-width:80%;
+font-size:14px;
+float:right;
+clear:both;
+">{msg['text']}</div>
+<div style="clear:both;"></div>
+""",
             unsafe_allow_html=True
         )
     else:
-        # Bot bubble: left-aligned, dark gray
         st.markdown(
             f"""
-            <div style="
-                text-align:left;
-                background-color:#2C2C2C;  /* dark gray */
-                color:#FFFFFF;             /* white text */
-                border-radius:15px;
-                padding:10px;
-                margin:5px;
-                display:inline-block;
-                max-width:80%;
-                font-size:14px;
-                float:left;
-                clear:both;
-            ">{msg['text']}</div>
-            <div style="clear:both;"></div>
-            """,
+<div style="
+text-align:left;
+background-color:#2C2C2C;
+color:#FFFFFF;
+border-radius:15px;
+padding:10px;
+margin:5px;
+display:inline-block;
+max-width:80%;
+font-size:14px;
+float:left;
+clear:both;
+">{msg['text']}</div>
+<div style="clear:both;"></div>
+""",
             unsafe_allow_html=True
         )
 
@@ -183,4 +177,4 @@ st.components.v1.html("<script>document.getElementById('bottom').scrollIntoView(
 # FOOTER
 # ----------------------------
 st.markdown("---")
-st.markdown("👨‍⚖ Developed by Team BroCode — MIT ADT University")
+st.markdown("⚖ Developed by Team BroCode — MIT ADT University")
