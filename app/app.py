@@ -7,7 +7,7 @@ import os
 # CONFIGURE GOOGLE GEMINI API
 # ----------------------------
 genai.configure(api_key= "GEMINI_API_KEY")  # Replace with your real Gemini API key
-MODEL_NAME = "gemini-2.5-pro"
+MODEL_NAME = "gemini-2.0-flash"
 
 # ----------------------------
 # LOAD LOCAL LEGAL DATA
