@@ -6,17 +6,13 @@ import os
 # ----------------------------
 # CONFIGURE GOOGLE GEMINI API
 # ----------------------------
-genai.configure(api_key= st.secrets["GEMINI_API_KEY"])  # Replace with your real Gemini API key
-MODEL_NAME = "gemini-2.5-pro"
+genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])  # store your API key in .streamlit/secrets.toml
+MODEL_NAME = "gemini-2.5-flash"
 
 # ----------------------------
 # LOAD LOCAL LEGAL DATA
 # ----------------------------
-DATA_PATHS = [
-    r"C:\Users\Prithviraj\crminal-law-chatbot\data\statutes.json",
-    r"C:\Users\Prithviraj\crminal-law-chatbot\data\judgments.json",
-]
-
+DATA_PATHS = ["data/statutes.json", "data/judgments.json"]
 legal_docs = []
 for path in DATA_PATHS:
     if os.path.exists(path):
@@ -24,59 +20,93 @@ for path in DATA_PATHS:
             legal_docs.extend(json.load(f))
 
 # ----------------------------
-# STREAMLIT UI
+# STREAMLIT UI CONFIG
 # ----------------------------
-st.set_page_config(page_title="Criminal Law Chatbot", page_icon="⚖️")
-st.title("⚖️ Criminal Law Chatbot")
+st.set_page_config(page_title="Criminal Law Chatbot", page_icon="⚖", layout="wide")
+st.title("⚖ Criminal Law Chatbot")
 st.caption("Ask questions about Indian Criminal Law, IPC sections, or legal case references.")
+
+# ----------------------------
+# SESSION STATE FOR CHAT
+# ----------------------------
+if "messages" not in st.session_state:
+    st.session_state["messages"] = []
+
+# ----------------------------
+# SIDEBAR: Suggested Questions & Reset
+# ----------------------------
+with st.sidebar:
+    st.header("⚖ Quick Actions")
+    if st.button("Reset Chat"):
+        st.session_state["messages"] = []
+
+    st.subheader("Suggested Questions")
+    for section in ["Section 378 IPC", "Section 420 IPC", "Section 375 IPC"]:
+        if st.button(section):
+            st.session_state["messages"].append({"role": "user", "text": section})
 
 # ----------------------------
 # USER INPUT
 # ----------------------------
-query = st.text_area(
-    "🔍 Enter your legal question:",
-    height=100,
-    placeholder="e.g., What is Section 378 of IPC?",
-    key="query_input"
-)
+query = st.text_area("Ask your legal question:", height=100, key="query_input")
+if st.button("Send"):
+    if query.strip():
+        # Add user message to session
+        st.session_state["messages"].append({"role": "user", "text": query})
 
-# Button with unique key to prevent duplicate ID error
-if st.button("Get Answer", key="get_answer_button"):
-    if not query.strip():
-        st.warning("Please enter a question before clicking the button.")
-    else:
-        with st.spinner("Analyzing legal data and generating response..."):
-            # Optional: build context from local statutes/judgments
-            context_snippets = []
-            for d in legal_docs:
-                text = d.get("text", "")
-                if query.lower() in text.lower():
-                    context_snippets.append(text)
-            context = "\n".join(context_snippets[:5])
+        # ----------------------------
+        # BUILD CONTEXT FROM LOCAL DATA
+        # ----------------------------
+        context_snippets = [
+            d.get("text", "") for d in legal_docs
+            if query.lower() in d.get("text", "").lower()
+        ]
+        context = "\n".join(context_snippets[:3])  # top 3 matches
 
-            # Prepare prompt for Gemini
-            prompt = f"""
+        # ----------------------------
+        # BUILD PROMPT FOR GEMINI
+        # ----------------------------
+        chat_history = ""
+        for msg in st.session_state["messages"][-6:]:  # last 6 messages
+            role = "User" if msg["role"] == "user" else "Assistant"
+            chat_history += f"{role}: {msg['text']}\n"
+
+        prompt = f"""
 You are an expert Indian criminal law assistant.
-Use the following context from statutes and judgments (if relevant) to answer precisely.
+Use the following context from statutes and judgments (if relevant) to answer accurately.
 
 Context:
-{context or "No relevant context found in local data."}
+{context or "No relevant context found."}
 
-Question:
-{query}
+Conversation so far:
+{chat_history}
 
-Answer concisely in simple legal terms, citing IPC sections or examples where possible.
+Answer the user's latest question concisely, in simple legal terms, citing IPC sections or examples where possible.
 """
 
-            # Generate response using Google Gemini
+        # ----------------------------
+        # GENERATE RESPONSE
+        # ----------------------------
+        try:
             model = genai.GenerativeModel(MODEL_NAME)
             response = model.generate_content(prompt)
+            answer = response.text.strip()
+        except Exception as e:
+            answer = "⚠ Error generating response. Please try again."
 
-            st.subheader("📘 Answer:")
-            st.write(response.text)
+        st.session_state["messages"].append({"role": "assistant", "text": answer})
+
+# ----------------------------
+# DISPLAY CHAT HISTORY AS BUBBLES
+# ----------------------------
+for msg in st.session_state["messages"]:
+    if msg["role"] == "user":
+        st.chat_message("user").write(msg["text"])
+    else:
+        st.chat_message("assistant").write(msg["text"])
 
 # ----------------------------
 # FOOTER
 # ----------------------------
 st.markdown("---")
-st.markdown("👨‍⚖️ *Developed by Uss*")
+st.markdown("👨‍⚖ Developed by Team BroCode — MIT ADT University")
