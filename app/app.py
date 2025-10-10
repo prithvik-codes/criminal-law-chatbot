@@ -4,7 +4,6 @@ import google.generativeai as genai
 import json
 import os
 import uuid
-import html as _html
 
 # ----------------------------
 # CONFIGURE GOOGLE GEMINI API
@@ -16,7 +15,7 @@ MODEL_NAME = "gemini-2.5-flash"
 # STREAMLIT CONFIG
 # ----------------------------
 st.set_page_config(page_title="Criminal Law Chatbot", page_icon="⚖")
-st.title("Criminal Law Chatbot")
+st.title("⚖ Criminal Law Chatbot")
 st.caption("Ask questions about Indian Criminal Law, IPC sections, or legal case references.")
 
 # ----------------------------
@@ -121,12 +120,11 @@ if submit and user_input.strip():
     # Build conversation history for AI context
     full_chat_context = "\n".join([f"{m['role']}: {m['text']}" for m in messages])
 
-    # Prepare prompt (pointwise structured output)
+    # Prepare prompt
     prompt = f"""
 You are an expert Indian criminal law assistant.
 Use the previous conversation and the following statutes/judgments context to answer
 precisely.
-Provide your answer in numbered points.
 Conversation history:
 {full_chat_context}
 Context from local data:
@@ -153,65 +151,60 @@ Answer concisely in simple legal terms, citing IPC sections or examples where po
         json.dump(st.session_state["chat_sessions"], f, indent=2, ensure_ascii=False)
 
 # ----------------------------
-# DISPLAY CHAT BUBBLES (DARK MODE) WITH AUTO-SCROLL
+# DISPLAY CHAT BUBBLES (DARK MODE)
 # ----------------------------
-chat_html = """
-<div id="chat-container" style="padding:12px; max-height:65vh; overflow-y:auto; background:transparent;">
-"""
-
-for m in messages[-50:]:
-    safe_text = _html.escape(m["text"]).replace("\n", "<br>")
-    if m["role"] == "user":
-        chat_html += f'''
-        <div style="display:flex; justify-content:flex-end; clear:both;">
+st.markdown("<hr>", unsafe_allow_html=True)
+for msg in messages[-50:]:  # show last 50 messages
+    if msg["role"] == "user":
+        st.markdown(
+            f"""
             <div style="
-                background:#1E4620;
+                text-align:right;
+                background-color:#1E4620;
                 color:#FFFFFF;
                 border-radius:15px;
                 padding:10px;
-                margin:6px;
+                margin:5px;
                 display:inline-block;
                 max-width:80%;
                 font-size:14px;
-            ">
-                {safe_text}
-            </div>
-        </div>
-        '''
+                float:right;
+                clear:both;
+            ">{msg['text']}</div>
+            <div style="clear:both;"></div>
+            """,
+            unsafe_allow_html=True
+        )
     else:
-        chat_html += f'''
-        <div style="display:flex; justify-content:flex-start; clear:both;">
+        st.markdown(
+            f"""
             <div style="
-                background:#2C2C2C;
+                text-align:left;
+                background-color:#2C2C2C;
                 color:#FFFFFF;
                 border-radius:15px;
                 padding:10px;
-                margin:6px;
+                margin:5px;
                 display:inline-block;
                 max-width:80%;
                 font-size:14px;
-            ">
-                {safe_text}
-            </div>
-        </div>
-        '''
+                float:left;
+                clear:both;
+            ">{msg['text']}</div>
+            <div style="clear:both;"></div>
+            """,
+            unsafe_allow_html=True
+        )
 
-chat_html += "</div>"
-
-# JS to scroll to bottom whenever chat_html is rendered
-chat_html += """
-<script>
-    var c = document.getElementById('chat-container');
-    if(c){
-        c.scrollTop = c.scrollHeight;
-    }
-</script>
-"""
-
-st.components.v1.html(chat_html, height=600, scrolling=True)
+# Scroll to latest message
+st.markdown("<div id='bottom'></div>", unsafe_allow_html=True)
+st.components.v1.html(
+    "<script>document.getElementById('bottom').scrollIntoView();</script>",
+    height=0
+)
 
 # ----------------------------
 # FOOTER
 # ----------------------------
 st.markdown("---")
-st.markdown(" Developed by Team BroCode — MIT ADT University")
+st.markdown(" ⚖ Developed by Team BroCode — MIT ADT University")
