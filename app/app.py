@@ -6,7 +6,7 @@ import os
 # ----------------------------
 # CONFIGURE GOOGLE GEMINI API
 # ----------------------------
-genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])  # store your API key in .streamlit/secrets.toml
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])  # store your API key in .streamlit/secrets.toml
 MODEL_NAME = "gemini-2.5-flash"
 
 # ----------------------------
