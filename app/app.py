@@ -15,7 +15,7 @@ MODEL_NAME = "gemini-2.5-flash"
 # STREAMLIT CONFIG
 # ----------------------------
 st.set_page_config(page_title="Criminal Law Chatbot", page_icon="⚖")
-st.title("📜🤖 Criminal Law Chatbot")
+st.title("⚖ Criminal Law Chatbot")
 st.caption("Ask questions about Indian Criminal Law, IPC sections, or legal case references.")
 
 # ----------------------------
@@ -196,11 +196,13 @@ for msg in messages[-50:]:  # show last 50 messages
             unsafe_allow_html=True
         )
 
-# Scroll to latest message
+# ----------------------------
+# AUTO-SCROLL TO LATEST MESSAGE
+# ----------------------------
 st.markdown("<div id='bottom'></div>", unsafe_allow_html=True)
 st.components.v1.html(
-    "<script>document.getElementById('bottom').scrollIntoView();</script>",
-    height=0
+    "<script>document.getElementById('bottom').scrollIntoView({behavior: 'smooth'});</script>",
+    height=0,
 )
 
 # ----------------------------
