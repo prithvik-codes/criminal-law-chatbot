@@ -6,7 +6,7 @@ import google.generativeai as genai
 # ----------------------------
 # CONFIGURE GOOGLE GEMINI API
 # ----------------------------
-genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])  # Use env variable for safety
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])  # Use env variable for safety
 MODEL_NAME = "gemini-2.5-flash"
 
 # ----------------------------
